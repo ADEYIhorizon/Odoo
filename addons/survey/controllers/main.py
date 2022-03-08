@@ -8,7 +8,7 @@ import werkzeug
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
-from odoo import fields, http, _
+from odoo import fields, http, SUPERUSER_ID, _
 from odoo.addons.base.models.ir_ui_view import keep_query
 from odoo.exceptions import UserError
 from odoo.http import request, content_disposition
@@ -79,6 +79,14 @@ class Survey(http.Controller):
 
         if (not survey_sudo.page_ids and survey_sudo.questions_layout == 'page_per_section') or not survey_sudo.question_ids:
             return 'survey_void'
+
+        if answer_sudo:
+            if request.env.user._is_public() and answer_sudo.partner_id:
+                # answers from public user should not have any partner_id; this indicates probably a cookie issue
+                return 'answer_wrong_user'
+            if not request.env.user._is_public() and answer_sudo.partner_id != request.env.user.partner_id:
+                # partner mismatch, probably a cookie issue
+                return 'answer_wrong_user'
 
         if answer_sudo and answer_sudo.deadline and answer_sudo.deadline < datetime.now():
             return 'answer_deadline'
@@ -208,10 +216,19 @@ class Survey(http.Controller):
          * a token linked to an answer or generate a new token if access is allowed;
         """
         # Get the current answer token from cookie
+        answer_from_cookie = False
         if not answer_token:
             answer_token = request.httprequest.cookies.get('survey_%s' % survey_token)
+            answer_from_cookie = bool(answer_token)
 
         access_data = self._get_access_data(survey_token, answer_token, ensure_token=False)
+
+        if answer_from_cookie and access_data['validity_code'] in ('answer_wrong_user', 'token_wrong'):
+            # If the cookie had been generated for another user or does not correspond to any existing answer object
+            # (probably because it has been deleted), ignore it and redo the check.
+            # The cookie will be replaced by a legit value when resolving the URL, so we don't clean it further here.
+            access_data = self._get_access_data(survey_token, None, ensure_token=False)
+
         if access_data['validity_code'] is not True:
             return self._redirect_with_error(access_data, access_data['validity_code'])
 
@@ -265,6 +282,7 @@ class Survey(http.Controller):
 
         if not answer_sudo.is_session_answer and survey_sudo.is_time_limited and answer_sudo.start_datetime:
             data.update({
+                'server_time': fields.Datetime.now(),
                 'timer_start': answer_sudo.start_datetime.isoformat(),
                 'time_limit_minutes': survey_sudo.time_limit
             })
@@ -467,8 +485,8 @@ class Survey(http.Controller):
 
         errors = {}
         # Prepare answers / comment by question, validate and save answers
-        inactive_questions = request.env['survey.question'] if answer_sudo.is_session_answer else answer_sudo._get_inactive_conditional_questions()
         for question in questions:
+            inactive_questions = request.env['survey.question'] if answer_sudo.is_session_answer else answer_sudo._get_inactive_conditional_questions()
             if question in inactive_questions:  # if question is inactive, skip validation and save
                 continue
             answer, comment = self._extract_comment_from_answers(question, post.get(str(question.id)))
@@ -535,7 +553,7 @@ class Survey(http.Controller):
                 if not isinstance(answers, list):
                     answers = [answers]
                 for answer in answers:
-                    if 'comment' in answer:
+                    if isinstance(answer, dict) and 'comment' in answer:
                         comment = answer['comment'].strip()
                     else:
                         answers_no_comment.append(answer)
@@ -639,7 +657,7 @@ class Survey(http.Controller):
         return request.render('survey.survey_page_statistics', template_values)
 
     def _generate_report(self, user_input, download=True):
-        report = request.env.ref('survey.certification_report').sudo()._render_qweb_pdf([user_input.id], data={'report_type': 'pdf'})[0]
+        report = request.env.ref('survey.certification_report').with_user(SUPERUSER_ID)._render_qweb_pdf([user_input.id], data={'report_type': 'pdf'})[0]
 
         report_content_disposition = content_disposition('Certification.pdf')
         if not download:

@@ -200,9 +200,12 @@ class Website(models.Model):
 
     @api.model
     def sale_get_payment_term(self, partner):
+        pt = self.env.ref('account.account_payment_term_immediate', False).sudo()
+        if pt:
+            pt = (not pt.company_id.id or self.company_id.id == pt.company_id.id) and pt
         return (
             partner.property_payment_term_id or
-            self.env.ref('account.account_payment_term_immediate', False) or
+            pt or
             self.env['account.payment.term'].sudo().search([('company_id', '=', self.company_id.id)], limit=1)
         ).id
 
@@ -386,6 +389,7 @@ class Website(models.Model):
 
     def _bootstrap_snippet_filters(self):
         super(Website, self)._bootstrap_snippet_filters()
+        # The same behavior is done in the post_init hook
         action = self.env.ref('website_sale.dynamic_snippet_products_action', raise_if_not_found=False)
         if action:
             self.env['website.snippet.filter'].create({

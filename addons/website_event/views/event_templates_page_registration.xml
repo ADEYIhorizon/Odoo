@@ -117,7 +117,7 @@
 <!-- Event - Registration -->
 <template id="registration_template" name="Registration">
     <div t-if="request.env.user.has_group('event.group_event_manager')" class="alert alert-info rounded-0 o_website_event_configuration o_not_editable" role="status">
-        <a t-attf-href="/web#id=#{event.id}&amp;view_type=form&amp;model=event.event">
+        <a t-attf-href="/web#id=#{event.id}&amp;menu_id=#{backend_menu_id}&amp;view_type=form&amp;model=event.event">
             <i class="fa fa-pencil mr-2" role="img" aria-label="Edit" title="Edit event registration in backend"/><em>Configure Event Tickets</em>
         </a>
     </div>
@@ -215,6 +215,7 @@
                             <span t-if="tickets" t-field="tickets.name"/>
                             <span t-else="">Registration</span>
                         </h6>
+                        <small t-if="tickets.end_sale_date and tickets.sale_available and not tickets.is_expired" class="text-muted mr-3" itemprop="availabilityEnds">Sales end on <span itemprop="priceValidUntil" t-field="tickets.end_sale_date"/></small>
                         <div class="ml-auto o_wevent_nowrap">
                             <t t-if="event.event_registrations_open">
                                 <span class="text-dark font-weight-bold align-middle pr-2">Qty</span>

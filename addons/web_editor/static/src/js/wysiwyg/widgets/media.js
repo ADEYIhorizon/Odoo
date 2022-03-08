@@ -251,15 +251,7 @@ var FileWidget = SearchableMediaWidget.extend({
      * @override
      */
     _clear: function () {
-        if (this.$media.is('img')) {
-            return;
-        }
-        var allImgClasses = /(^|\s+)((img(\s|$)|img-(?!circle|rounded|thumbnail))[^\s]*)/g;
-        var allImgClassModifiers = /(^|\s+)(rounded-circle|shadow|rounded|img-thumbnail|mx-auto)([^\s]*)/g;
-        this.media.className = this.media.className && this.media.className
-            .replace('o_we_custom_image', '')
-            .replace(allImgClasses, ' ')
-            .replace(allImgClassModifiers, ' ');
+        this.media.className = this.media.className && this.media.className.replace(/(^|\s+)(o_image)(?=\s|$)/g, ' ');
     },
     /**
      * Returns the domain for attachments used in media dialog.
@@ -303,7 +295,7 @@ var FileWidget = SearchableMediaWidget.extend({
             domain.push(['name', 'ilike', needle]);
         }
         if (!this.options.useMediaLibrary) {
-            domain.push('!', ['url', '=ilike', '/web_editor/shape/%']);
+            domain.push('|', ['url', '=', false], '!', ['url', '=ilike', '/web_editor/shape/%']);
         }
         domain.push('!', ['name', '=like', '%.crop']);
         domain.push('|', ['type', '=', 'binary'], '!', ['url', '=like', '/%/static/%']);
@@ -452,7 +444,7 @@ var FileWidget = SearchableMediaWidget.extend({
             }
             href += 'unique=' + img.checksum + '&download=true';
             this.$media.attr('href', href);
-            this.$media.addClass('o_image').attr('title', img.name).attr('data-mimetype', img.mimetype);
+            this.$media.addClass('o_image').attr('title', img.name);
         }
 
         this.$media.attr('alt', img.alt || img.description || '');
@@ -465,6 +457,10 @@ var FileWidget = SearchableMediaWidget.extend({
         removeOnImageChangeAttrs.forEach(attr => {
             delete this.media.dataset[attr];
         });
+        // Add mimetype for documents
+        if (!img.image_src) {
+            this.media.dataset.mimetype = img.mimetype;
+        }
         this.media.classList.remove('o_modified_image_to_save');
         this.$media.trigger('image_changed');
         return this.media;
@@ -559,13 +555,18 @@ var FileWidget = SearchableMediaWidget.extend({
      * @private
      * @returns {Promise}
      */
-    _addData: function () {
+    async _addData() {
+        let files = this.$fileInput[0].files;
+        if (!files.length) {
+            // Case if the input is emptied, return resolved promise
+            return;
+        }
+
         var self = this;
         var uploadMutex = new concurrency.Mutex();
 
         // Upload the smallest file first to block the user the least possible.
-        var files = _.sortBy(this.$fileInput[0].files, 'size');
-
+        files = _.sortBy(files, 'size');
         _.each(files, function (file) {
             // Upload one file at a time: no need to parallel as upload is
             // limited by bandwidth.
@@ -955,6 +956,14 @@ var ImageWidget = FileWidget.extend({
         this.libraryMedia = [];
         this._super(...arguments);
     },
+    /**
+     * @override
+     */
+    _clear: function (type) {
+        // Not calling _super: we don't want to call the document widget's _clear method on images
+        var allImgClasses = /(^|\s+)(img|img-\S*|o_we_custom_image|rounded-circle|rounded|thumbnail|shadow)(?=\s|$)/g;
+        this.media.className = this.media.className && this.media.className.replace(allImgClasses, ' ');
+    },
 });
 
 
@@ -1034,9 +1043,11 @@ var IconWidget = SearchableMediaWidget.extend({
             var cls = classes[i];
             if (_.contains(this.alias, cls)) {
                 this.selectedIcon = cls;
+                this.initialIcon = cls;
                 this._highlightSelectedIcon();
             }
         }
+        // Kept for compat in stable, no longer in use: remove in master
         this.nonIconClasses = _.without(classes, 'media_iframe_video', this.selectedIcon);
 
         return this._super.apply(this, arguments);
@@ -1052,7 +1063,6 @@ var IconWidget = SearchableMediaWidget.extend({
     save: function () {
         var style = this.$media.attr('style') || '';
         var iconFont = this._getFont(this.selectedIcon) || {base: 'fa', font: ''};
-        var finalClasses = _.uniq(this.nonIconClasses.concat([iconFont.base, iconFont.font]));
         if (!this.$media.is('span, i')) {
             var $span = $('<span/>');
             $span.data(this.$media.data());
@@ -1060,10 +1070,8 @@ var IconWidget = SearchableMediaWidget.extend({
             this.media = this.$media[0];
             style = style.replace(/\s*width:[^;]+/, '');
         }
-        this.$media.attr({
-            class: _.compact(finalClasses).join(' '),
-            style: style || null,
-        });
+        this.$media.removeClass(this.initialIcon).addClass([iconFont.base, iconFont.font]);
+        this.$media.attr('style', style || null);
         return Promise.resolve(this.media);
     },
     /**
@@ -1101,7 +1109,7 @@ var IconWidget = SearchableMediaWidget.extend({
      * @override
      */
     _clear: function () {
-        var allFaClasses = /(^|\s)(fa(\s|$)|fa-[^\s]*)/g;
+        var allFaClasses = /(^|\s)(fa|(text-|bg-|fa-)\S*|rounded-circle|rounded|thumbnail|shadow)(?=\s|$)/g;
         this.media.className = this.media.className && this.media.className.replace(allFaClasses, ' ');
     },
     /**

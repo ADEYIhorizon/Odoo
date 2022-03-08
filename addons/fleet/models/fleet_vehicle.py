@@ -33,10 +33,11 @@ class FleetVehicle(models.Model):
 
     @api.depends('model_id')
     def _compute_manager_id(self):
-        if self.model_id:
-            self.manager_id = self.model_id.manager_id
-        else:
-            self.manager_id = None
+        for vehicle in self:
+            if vehicle.model_id:
+                vehicle.manager_id = vehicle.model_id.manager_id
+            else:
+                vehicle.manager_id = None
 
     brand_id = fields.Many2one('fleet.vehicle.model.brand', 'Brand', related="model_id.brand_id", store=True, readonly=False)
     log_drivers = fields.One2many('fleet.vehicle.assignation.log', 'vehicle_id', string='Assignment Logs')
@@ -178,7 +179,7 @@ class FleetVehicle(models.Model):
             ('expiration_date', '>', today),
             ('expiration_date', '<', limit_date),
             ('state', 'in', ['open', 'expired'])
-        ]).mapped('id')
+        ]).mapped('vehicle_id').ids
         res.append(('id', search_operator, res_ids))
         return res
 
@@ -194,7 +195,7 @@ class FleetVehicle(models.Model):
             ('expiration_date', '!=', False),
             ('expiration_date', '<', today),
             ('state', 'in', ['open', 'expired'])
-        ]).mapped('id')
+        ]).mapped('vehicle_id').ids
         res.append(('id', search_operator, res_ids))
         return res
 

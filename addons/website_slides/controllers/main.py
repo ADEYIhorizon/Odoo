@@ -68,7 +68,7 @@ class WebsiteSlides(WebsiteProfile):
     def _set_completed_slide(self, slide):
         # quiz use their specific mechanism to be marked as done
         if slide.slide_type == 'quiz' or slide.question_ids:
-            raise werkzeug.exceptions.Forbidden(_("Slide with questions must be marked as done when submitting all good answers "))
+            raise UserError(_("Slide with questions must be marked as done when submitting all good answers "))
         if slide.website_published and slide.channel_id.is_member:
             slide.action_set_completed()
         return True
@@ -991,7 +991,7 @@ class WebsiteSlides(WebsiteProfile):
             'can_create': can_create,
         }
 
-    @http.route('/slides/category/add', type="http", website=True, auth="user")
+    @http.route('/slides/category/add', type="http", website=True, auth="user", methods=['POST'])
     def slide_category_add(self, channel_id, name):
         """ Adds a category to the specified channel. Slide is added at the end
         of slide list based on sequence. """

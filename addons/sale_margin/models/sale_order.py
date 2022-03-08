@@ -10,7 +10,7 @@ class SaleOrderLine(models.Model):
         "Margin", compute='_compute_margin',
         digits='Product Price', store=True, groups="base.group_user")
     margin_percent = fields.Float(
-        "Margin (%)", compute='_compute_margin', store=True, groups="base.group_user")
+        "Margin (%)", compute='_compute_margin', store=True, groups="base.group_user", group_operator="avg")
     purchase_price = fields.Float(
         string='Cost', compute="_compute_purchase_price",
         digits='Product Price', store=True, readonly=False,
@@ -29,7 +29,8 @@ class SaleOrderLine(models.Model):
                 # If the standard_price is 0
                 # Avoid unnecessary computations
                 # and currency conversions
-                line.purchase_price = 0.0
+                if not line.purchase_price:
+                    line.purchase_price = 0.0
                 continue
             fro_cur = product.cost_currency_id
             to_cur = line.currency_id or line.order_id.currency_id

@@ -15,7 +15,7 @@ class AccountMove(models.Model):
         states={'draft': [('readonly', False)]},
         string='Purchase Order',
         help="Auto-complete from a past purchase order.")
-    
+
     def _get_invoice_reference(self):
         self.ensure_one()
         vendor_refs = [ref for ref in set(self.line_ids.mapped('purchase_line_id.order_id.partner_ref')) if ref]
@@ -45,6 +45,7 @@ class AccountMove(models.Model):
 
         # Copy data from PO
         invoice_vals = self.purchase_id.with_company(self.purchase_id.company_id)._prepare_invoice()
+        invoice_vals['currency_id'] = self.line_ids and self.currency_id or invoice_vals.get('currency_id')
         del invoice_vals['ref']
         self.update(invoice_vals)
 
@@ -72,7 +73,6 @@ class AccountMove(models.Model):
 
         self.purchase_id = False
         self._onchange_currency()
-        self.partner_bank_id = self.bank_partner_id.bank_ids and self.bank_partner_id.bank_ids[0]
 
     @api.onchange('partner_id', 'company_id')
     def _onchange_partner_id(self):
